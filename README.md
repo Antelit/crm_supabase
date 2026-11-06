@@ -1,75 +1,332 @@
-# React + TypeScript + Vite
+# Mini CRM — Construction Management
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+Веб-приложение для управления строительными объектами и задачами. Система позволяет менеджеру создавать объекты, назначать исполнителей и контролировать выполнение работ. Исполнители видят назначенные им задачи и обновляют их статусы.
 
-Currently, two official plugins are available:
+**Production:** https://crm-supabase-bice.vercel.app/
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+## 1. Технологический стек
 
-## React Compiler
+### Frontend
+- React 19
+- TypeScript
+- Vite
+- Supabase JavaScript Client
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+### Backend и инфраструктура
+- Supabase
+- PostgreSQL
+- Supabase Auth
+- Row Level Security (RLS)
+- PostgreSQL Functions и Triggers
+- Vercel — размещение frontend
+- GitHub — хранение исходного кода
 
-## Expanding the ESLint configuration
+Основная бизнес-логика, контроль доступа и операции изменения статусов реализованы на стороне PostgreSQL через Supabase.
 
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
+## 2. Функциональность
 
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
+### Менеджер
+- Просмотр списка строительных объектов.
+- Создание новых объектов.
+- Просмотр задач по каждому объекту.
+- Создание задач и назначение исполнителей.
+- Редактирование задач.
+- Переназначение исполнителей.
+- Проверка выполненных задач.
+- Принятие задачи или отправка на доработку.
+- Просмотр истории изменения статусов.
 
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
+### Исполнитель
+- Просмотр доступных ему объектов.
+- Просмотр списка назначенных задач.
+- Просмотр описания и истории задачи.
+- Перевод задачи в работу.
+- Передача задачи на проверку.
+- Возврат задачи в работу после доработки.
 
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+## 3. Роли и жизненный цикл задачи
 
+В системе предусмотрены две роли:
+
+| Роль | Возможности |
+|---|---|
+| manager | Управление объектами, задачами и исполнителями |
+| executor | Работа с назначенными задачами |
+
+### Статусы задач
+
+| Статус | Описание |
+|---|---|
+| `new` | Новая задача |
+| `in_progress` | В работе |
+| `review` | На проверке у менеджера |
+| `accepted` | Принята менеджером |
+| `revision` | Отправлена на доработку |
+
+### Допустимые переходы
+
+```text
+new
+  |
+  v
+in_progress
+  |
+  v
+review
+  |
+  +-------> accepted
+  |
+  +-------> revision
+                |
+                v
+           in_progress
 ```
 
-You can also install [eslint-plugin-react-x](https://npmx.dev/package/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://npmx.dev/package/eslint-plugin-react-dom) for React-specific lint rules:
+Правила:
+- Исполнитель может переводить назначенную ему задачу из `new` в `in_progress`.
+- Исполнитель может передать задачу из `in_progress` в `review`.
+- Менеджер может принять задачу (`accepted`) или отправить её на доработку (`revision`).
+- При отправке на доработку менеджер обязан указать комментарий.
+- Исполнитель может вернуть задачу из `revision` в `in_progress`.
+- Остальные переходы запрещены.
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
+Проверка переходов выполняется на стороне базы данных, а не только в интерфейсе.
 
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+## 4. Архитектура проекта
 
+```text
+crm_supabase/
+├── public/
+├── src/
+│   ├── components/
+│   │   ├── ObjectsPage.tsx
+│   │   ├── ObjectTasksPage.tsx
+│   │   ├── MyTasksPage.tsx
+│   │   └── TaskDetailsPage.tsx
+│   ├── lib/
+│   │   └── supabase.ts
+│   ├── App.tsx
+│   └── ...
+├── supabase/
+│   └── migrations/
+├── .env
+├── .gitignore
+├── package.json
+├── tsconfig.json
+└── vite.config.ts
 ```
+
+### Основные компоненты
+
+| Компонент | Назначение |
+|---|---|
+| `App.tsx` | Авторизация, восстановление сессии и навигация |
+| `ObjectsPage.tsx` | Список строительных объектов и их создание |
+| `ObjectTasksPage.tsx` | Задачи конкретного объекта и назначение исполнителей |
+| `MyTasksPage.tsx` | Список задач текущего исполнителя |
+| `TaskDetailsPage.tsx` | Подробная информация о задаче, действия и история |
+
+`src/lib/supabase.ts` содержит инициализацию клиента Supabase.
+
+## 5. Архитектура базы данных
+
+Используется PostgreSQL.
+
+### Основные таблицы
+
+**profile**
+
+Профили пользователей приложения:
+- `id_profile` — идентификатор профиля;
+- `full_name` — имя пользователя;
+- `role` — роль (`manager` или `executor`).
+
+Профиль связан с пользователем Supabase Auth.
+
+**object**
+
+Строительные объекты:
+- `id_object` — идентификатор объекта;
+- `name` — название;
+- `address` — адрес;
+- `id_profile_author` — автор создания.
+
+**task**
+
+Задачи:
+- `id_task` — идентификатор задачи;
+- `id_object` — строительный объект;
+- `id_profile_author` — автор задачи;
+- `id_profile_assignee` — назначенный исполнитель;
+- `title` — название;
+- `description` — описание;
+- `status` — текущий статус.
+
+**task_status_history**
+
+История изменения статусов:
+- `id_task_status_history` — идентификатор записи;
+- `id_task` — задача;
+- `id_profile_author` — пользователь, изменивший статус;
+- `from_status` — предыдущий статус;
+- `to_status` — новый статус;
+- `comment` — комментарий;
+- `created_at` — дата изменения.
+
+### Связи
+
+```text
+auth.users
+    |
+    | 1:1
+    v
+profile
+    |
+    +-------- object
+    |           |
+    |           +-------- task
+    |                       |
+    +-----------------------+
+                            |
+                            v
+                    task_status_history
+```
+
+Все основные сущности используют UUID в качестве первичных ключей.
+
+## 6. Безопасность и контроль доступа
+
+Безопасность реализована на уровне PostgreSQL с использованием Row Level Security (RLS).
+
+Основные принципы:
+
+- Каждый пользователь проходит авторизацию через Supabase Auth.
+- Роль пользователя хранится в таблице `profile`.
+- Менеджер имеет доступ к управлению объектами и задачами.
+- Исполнитель видит только назначенные ему задачи и связанные с ними объекты.
+- Проверка прав выполняется политиками RLS.
+- Изменение статуса нельзя выполнить обычным `UPDATE` поля `status`.
+- Переходы статусов выполняются через PostgreSQL RPC-функцию `change_task_status`.
+- Функция проверяет роль пользователя, назначение задачи и допустимость перехода.
+- История изменений формируется на стороне базы данных.
+- У авторизованных пользователей нет прямых прав на изменение или удаление истории.
+
+В frontend используется только публичный Supabase Publishable Key. Секретный `service_role` key не передаётся клиенту.
+
+## 7. Локальный запуск
+
+### Требования
+
+- Node.js (рекомендуется актуальная LTS-версия).
+- npm.
+- Доступ к проекту Supabase.
+
+### Установка
+
+Клонировать репозиторий:
+
+```bash
+git clone https://github.com/Antelit/crm_supabase.git
+cd crm_supabase
+```
+
+Установить зависимости:
+
+```bash
+npm install
+```
+
+### Настройка окружения
+
+Создать файл `.env` в корне проекта:
+
+```env
+VITE_SUPABASE_URL=https://YOUR_PROJECT.supabase.co
+VITE_SUPABASE_PUBLISHABLE_KEY=YOUR_SUPABASE_PUBLISHABLE_KEY
+```
+
+Значения находятся в настройках проекта Supabase.
+
+Не добавлять `.env` в Git.
+
+### Запуск
+
+```bash
+npm run dev
+```
+
+По умолчанию Vite запускает приложение по адресу:
+
+`http://localhost:5173`
+
+## 8. Миграции базы данных
+
+SQL-миграции находятся в каталоге:
+
+`supabase/migrations/`
+
+Для применения миграций через Supabase CLI:
+
+```bash
+npx supabase login
+npx supabase link --project-ref YOUR_PROJECT_REF
+npx supabase db push
+```
+
+Миграции применяются последовательно.
+
+Перед применением миграций к существующей production-базе рекомендуется создать резервную копию.
+
+## 9. Создание пользователей
+
+Публичная регистрация пользователей не предусмотрена.
+
+Пользователей необходимо создавать через Supabase Auth, после чего для каждого пользователя должен существовать соответствующий профиль в таблице `profile` с назначенной ролью.
+
+Для работы системы необходимы:
+- одна учётная запись менеджера;
+- минимум две учётные записи исполнителей.
+
+## 10. Проверка качества
+
+Проверка ESLint:
+
+```bash
+npm run lint
+```
+
+Проверка TypeScript и production-сборка:
+
+```bash
+npm run build
+```
+
+Локальный просмотр production-сборки:
+
+```bash
+npm run preview
+```
+
+## 11. Публикация
+
+Frontend размещён на Vercel и связан с GitHub-репозиторием.
+
+При отправке изменений в основную ветку `main` Vercel автоматически запускает новую сборку и публикацию.
+
+Параметры сборки:
+
+| Параметр | Значение |
+|---|---|
+| Framework | Vite |
+| Build Command | `npm run build` |
+| Output Directory | `dist` |
+| Install Command | `npm install` |
+
+Переменные окружения `VITE_SUPABASE_URL` и `VITE_SUPABASE_PUBLISHABLE_KEY` должны быть настроены в Vercel.
+
+## 12. Ссылки
+
+- **Production:** https://crm-supabase-bice.vercel.app/
+- **GitHub:** https://github.com/Antelit/crm_supabase
+- **Supabase:** https://supabase.com/
+- **Vercel:** https://vercel.com/
